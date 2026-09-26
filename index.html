@@ -51,6 +51,15 @@
             -webkit-text-fill-color: transparent;
         }
         .logo p { font-size: 11px; color: var(--text-secondary); }
+        .unified-badge {
+            background: linear-gradient(135deg, #22c55e, #3b82f6);
+            color: white;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
         .header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
         .conn-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
         .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); transition: background 0.3s; }
@@ -208,7 +217,7 @@
             <div class="logo-icon">☁️</div>
             <div>
                 <h1>Cloud Private</h1>
-                <p>Lưu trữ cá nhân • HTTP + TCP Protocol</p>
+                <p>Lưu trữ cá nhân • <span class="unified-badge">UNIFIED</span> HTTP + TCP trên cùng 1 port</p>
             </div>
         </div>
         <div class="header-right">
@@ -250,7 +259,7 @@
             <div>
                 <h4>Chưa kết nối server Python</h4>
                 <p>Mở terminal và chạy: <code>python server.py</code></p>
-                <p style="margin-top:4px">Server sẽ chạy tại HTTP :8080 và TCP :9090</p>
+                <p style="margin-top:4px">Server chạy unified port 8080 (HTTP + TCP cùng lúc)</p>
             </div>
         </div>
         <div id="fileBox"></div>
@@ -284,7 +293,7 @@
 
     <!-- Footer -->
     <footer class="footer">
-        <span>☁️ Cloud Private • HTTP + TCP Combined Protocol</span>
+        <span>☁️ Cloud Private • Unified Protocol (HTTP + TCP trên cùng 1 port)</span>
         <span id="pathDisplay">/</span>
     </footer>
 

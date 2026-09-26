@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-TCP Client cho Cloud Private
-Sử dụng để upload file qua TCP (siêu nhanh)
+TCP Client cho Cloud Private - UNIFIED PORT
+============================================
+Kết nối TCP đến CÙNG PORT với HTTP (mặc định 8080).
+Server tự động detect TCP protocol.
 
 Cách dùng:
     python tcp_client.py upload <file_path> [remote_path]
@@ -17,8 +19,9 @@ import os
 import sys
 import time
 
+# CÙNG PORT với HTTP server
 TCP_HOST = "localhost"
-TCP_PORT = 9090
+TCP_PORT = 8080  # Unified port
 CHUNK_SIZE = 1024 * 1024  # 1MB
 
 
@@ -64,7 +67,7 @@ def calculate_checksum(filepath):
 
 
 def upload_file(filepath, remote_path="/"):
-    """Upload file qua TCP"""
+    """Upload file qua TCP (unified port)"""
     if not os.path.isfile(filepath):
         print(f"❌ File không tồn tại: {filepath}")
         return False
@@ -75,21 +78,22 @@ def upload_file(filepath, remote_path="/"):
     print(f"📤 Đang upload: {filename}")
     print(f"   Kích thước: {file_size / 1024 / 1024:.2f} MB")
     print(f"   Đường dẫn: {remote_path}")
+    print(f"   Port: {TCP_HOST}:{TCP_PORT} (unified)")
     
     # Tính checksum
     print("   Đang tính checksum...")
     checksum = calculate_checksum(filepath)
     print(f"   SHA-256: {checksum[:32]}...")
     
-    # Kết nối TCP
+    # Kết nối TCP đến CÙNG PORT với HTTP
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4 * 1024 * 1024)
     
     try:
         sock.connect((TCP_HOST, TCP_PORT))
-        print(f"   ✅ Đã kết nối TCP server")
+        print(f"   ✅ Đã kết nối (unified port {TCP_PORT})")
         
-        # Gửi header
+        # Gửi header - server sẽ detect đây là TCP protocol
         send_json(sock, {
             "cmd": "upload",
             "filename": filename,
@@ -104,7 +108,7 @@ def upload_file(filepath, remote_path="/"):
             print(f"   ❌ Server không sẵn sàng: {response}")
             return False
         
-        print("   🚀 Đang truyền file...")
+        print("   🚀 Đang truyền file (TCP fast mode)...")
         
         # Gửi file data
         sent = 0
@@ -124,7 +128,8 @@ def upload_file(filepath, remote_path="/"):
                 if progress - last_progress >= 5:
                     elapsed = time.time() - start_time
                     speed = sent / elapsed / (1024 * 1024) if elapsed > 0 else 0
-                    print(f"   ⏳ {progress:.1f}% - {speed:.1f} MB/s", end="\r")
+                    bar = "█" * int(progress / 5) + "░" * (20 - int(progress / 5))
+                    print(f"   [{bar}] {progress:.1f}% - {speed:.1f} MB/s   ", end="\r")
                     last_progress = progress
                 
                 # Nhận progress update từ server (non-blocking)
@@ -145,20 +150,22 @@ def upload_file(filepath, remote_path="/"):
         elapsed = time.time() - start_time
         speed = file_size / elapsed / (1024 * 1024) if elapsed > 0 else 0
         
+        print()  # newline
+        
         if final_response and final_response.get("status") == "complete":
-            print(f"\n   ✅ Upload thành công!")
+            print(f"   ✅ Upload thành công!")
             print(f"   📊 Tốc độ: {final_response.get('speed_mbps', speed):.1f} MB/s")
             print(f"   ⏱️  Thời gian: {final_response.get('elapsed_seconds', elapsed):.1f}s")
             print(f"   🔒 Checksum: {final_response.get('checksum', '')[:32]}...")
             print(f"   ✅ Checksum đã được xác minh!")
             return True
         else:
-            print(f"\n   ❌ Upload thất bại: {final_response}")
+            print(f"   ❌ Upload thất bại: {final_response}")
             return False
     
     except ConnectionRefusedError:
-        print(f"   ❌ Không kết nối được TCP server tại {TCP_HOST}:{TCP_PORT}")
-        print(f"   💡 Hãy chạy server.py trước")
+        print(f"   ❌ Không kết nối được server tại {TCP_HOST}:{TCP_PORT}")
+        print(f"   💡 Hãy chạy: python server.py")
         return False
     except Exception as e:
         print(f"\n   ❌ Lỗi: {e}")
@@ -168,7 +175,7 @@ def upload_file(filepath, remote_path="/"):
 
 
 def list_files(remote_path="/"):
-    """Liệt kê file qua TCP"""
+    """Liệt kê file qua TCP (unified port)"""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.connect((TCP_HOST, TCP_PORT))
@@ -178,6 +185,7 @@ def list_files(remote_path="/"):
         if response and response.get("status") == "ok":
             files = response.get("files", [])
             print(f"\n📂 Nội dung: {remote_path}")
+            print(f"   (qua unified port {TCP_PORT})")
             print("-" * 60)
             for f in files:
                 icon = "📁" if f["type"] == "folder" else "📄"
@@ -188,7 +196,7 @@ def list_files(remote_path="/"):
         else:
             print(f"❌ Lỗi: {response}")
     except ConnectionRefusedError:
-        print(f"❌ Không kết nối được TCP server tại {TCP_HOST}:{TCP_PORT}")
+        print(f"❌ Không kết nối được server tại {TCP_HOST}:{TCP_PORT}")
     except Exception as e:
         print(f"❌ Lỗi: {e}")
     finally:
@@ -196,7 +204,7 @@ def list_files(remote_path="/"):
 
 
 def ping():
-    """Kiểm tra kết nối TCP"""
+    """Kiểm tra kết nối (unified port)"""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         start = time.time()
@@ -206,11 +214,11 @@ def ping():
         elapsed = (time.time() - start) * 1000
         
         if response and response.get("status") == "pong":
-            print(f"✅ TCP Server OK - Ping: {elapsed:.1f}ms")
+            print(f"✅ Server OK - Ping: {elapsed:.1f}ms (unified port {TCP_PORT})")
         else:
             print(f"❌ Response không hợp lệ: {response}")
     except ConnectionRefusedError:
-        print(f"❌ Không kết nối được TCP server tại {TCP_HOST}:{TCP_PORT}")
+        print(f"❌ Không kết nối được server tại {TCP_HOST}:{TCP_PORT}")
     except Exception as e:
         print(f"❌ Lỗi: {e}")
     finally:
@@ -218,13 +226,16 @@ def ping():
 
 
 if __name__ == "__main__":
+    print(f"🔌 Cloud Private TCP Client (Unified Port {TCP_PORT})")
+    print()
+    
     if len(sys.argv) < 2:
-        print("TCP Client cho Cloud Private")
-        print()
         print("Cách dùng:")
-        print("  python tcp_client.py upload <file> [remote_path]")
-        print("  python tcp_client.py list [remote_path]")
-        print("  python tcp_client.py ping")
+        print(f"  python tcp_client.py upload <file> [remote_path]")
+        print(f"  python tcp_client.py list [remote_path]")
+        print(f"  python tcp_client.py ping")
+        print()
+        print(f"Server: {TCP_HOST}:{TCP_PORT} (HTTP + TCP unified)")
         sys.exit(1)
     
     command = sys.argv[1]

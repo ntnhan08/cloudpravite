@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Cloud Private Server
-====================
-Kết hợp HTTP + TCP trong 1 server duy nhất.
-- HTTP: Quản lý file, thư mục, download
-- TCP: Upload siêu nhanh với checksum verification
-- Đảm bảo không mất file khi upload
+Cloud Private Server - UNIFIED PROTOCOL
+========================================
+KẾT HỢP HTTP + TCP trên CÙNG 1 PORT DUY NHẤT.
+
+Server tự động detect protocol từ bytes đầu tiên:
+- HTTP request (GET, POST, PUT, DELETE...) → xử lý HTTP
+- TCP custom (length-prefixed JSON) → xử lý TCP siêu nhanh
 
 Chạy: python server.py
+Port: 8080 (cả HTTP và TCP)
 """
 
 import os
@@ -19,17 +21,14 @@ import threading
 import time
 import struct
 import shutil
-from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
-from pathlib import Path
 from datetime import datetime
 import traceback
 
 # ============================================================
 # CẤU HÌNH
 # ============================================================
-HTTP_PORT = 8080
-TCP_PORT = 9090
+PORT = 8080  # SINGLE PORT cho cả HTTP và TCP
 STORAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cloud_storage")
 CHUNK_SIZE = 1024 * 1024  # 1MB chunks
 MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB max
@@ -43,13 +42,11 @@ os.makedirs(STORAGE_DIR, exist_ok=True)
 
 def safe_path(rel_path):
     """Chuyển đường dẫn tương đối thành đường dẫn tuyệt đối an toàn"""
-    # Loại bỏ path traversal
     rel_path = rel_path.replace("..", "")
     rel_path = unquote(rel_path)
     if rel_path.startswith("/"):
         rel_path = rel_path[1:]
     full_path = os.path.normpath(os.path.join(STORAGE_DIR, rel_path))
-    # Đảm bảo không escape khỏi STORAGE_DIR
     if not full_path.startswith(os.path.normpath(STORAGE_DIR)):
         return None
     return full_path
@@ -98,14 +95,14 @@ def list_directory(dir_path):
 
 
 # ============================================================
-# CHUNKED UPLOAD HANDLER
+# CHUNKED UPLOAD MANAGER
 # ============================================================
 
 class ChunkedUploadManager:
     """Quản lý upload theo chunk để đảm bảo không mất file"""
     
     def __init__(self):
-        self.uploads = {}  # key: (filename, checksum) -> {chunks_received, total_chunks, temp_path}
+        self.uploads = {}
         self.lock = threading.Lock()
     
     def start_upload(self, filename, total_chunks, checksum, file_size):
@@ -136,7 +133,6 @@ class ChunkedUploadManager:
             upload = self.uploads[key]
             temp_path = upload["temp_path"]
             
-            # Ghi chunk vào vị trí đúng
             offset = chunk_index * CHUNK_SIZE
             try:
                 with open(temp_path, "r+b" if os.path.exists(temp_path) else "wb") as f:
@@ -145,7 +141,6 @@ class ChunkedUploadManager:
                 
                 upload["chunks_received"].add(chunk_index)
                 
-                # Kiểm tra đã nhận đủ chunks chưa
                 if len(upload["chunks_received"]) == upload["total_chunks"]:
                     return self._finalize_upload(key)
                 
@@ -159,28 +154,21 @@ class ChunkedUploadManager:
         temp_path = upload["temp_path"]
         expected_checksum = upload["checksum"]
         
-        # Verify checksum
         actual_checksum = calculate_checksum(temp_path)
         
         if actual_checksum != expected_checksum:
             os.remove(temp_path)
             del self.uploads[key]
-            return False, f"Checksum mismatch! Expected: {expected_checksum[:16]}..., Got: {actual_checksum[:16]}..."
+            return False, f"Checksum mismatch!"
         
-        # Di chuyển file đến vị trí cuối cùng (atomic move)
         filename = key[0]
         final_path = os.path.join(STORAGE_DIR, filename)
-        
-        # Đảm bảo thư mục tồn tại
         os.makedirs(os.path.dirname(final_path), exist_ok=True)
         
-        # Atomic move
         shutil.move(temp_path, final_path)
-        
-        # Cleanup
         del self.uploads[key]
         
-        return True, f"Upload complete! Checksum verified: {actual_checksum[:16]}..."
+        return True, f"Upload complete! Checksum verified."
     
     def cleanup_stale(self, max_age=3600):
         """Dọn dẹp upload bị bỏ dở"""
@@ -197,7 +185,6 @@ class ChunkedUploadManager:
 
 upload_manager = ChunkedUploadManager()
 
-# Dọn dẹp stale uploads mỗi 5 phút
 def cleanup_thread():
     while True:
         time.sleep(300)
@@ -207,144 +194,256 @@ threading.Thread(target=cleanup_thread, daemon=True).start()
 
 
 # ============================================================
-# HTTP SERVER HANDLER
+# UNIFIED SERVER - KẾT HỢP HTTP + TCP
 # ============================================================
 
-class CloudHTTPHandler(BaseHTTPRequestHandler):
-    """HTTP handler cho Cloud Private"""
+class UnifiedServer:
+    """
+    Server duy nhất lắng nghe trên 1 port, tự động detect protocol.
     
-    def log_message(self, format, *args):
-        """Custom log"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[HTTP {timestamp}] {args[0]}")
+    Cách hoạt động:
+    1. Peek 8 bytes đầu tiên của connection
+    2. Nếu bắt đầu bằng HTTP method (GET, POST, PUT, DELETE, HEAD, OPTIONS) → HTTP handler
+    3. Ngược lại → TCP custom protocol handler
+    """
     
-    def send_json(self, data, status=200):
-        """Gửi response JSON"""
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+    HTTP_METHODS = [b"GET ", b"POST ", b"PUT ", b"DELETE ", b"HEAD ", b"OPTIONS "]
     
-    def do_OPTIONS(self):
-        """Handle CORS preflight"""
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
+    def __init__(self, host="0.0.0.0", port=PORT):
+        self.host = host
+        self.port = port
+        self.running = False
+        self.server_socket = None
     
-    def do_GET(self):
-        """Xử lý GET requests"""
-        parsed = urlparse(self.path)
-        path = parsed.path
+    def start(self):
+        """Khởi động unified server"""
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 * 1024 * 1024)
+        self.server_socket.bind((self.host, self.port))
+        self.server_socket.listen(100)
+        self.running = True
+        
+        print(f"[SERVER] Unified server đang chạy trên port {self.port}")
+        print(f"[SERVER] Tự động detect: HTTP + TCP trên cùng 1 port")
+        print(f"[SERVER] Storage: {STORAGE_DIR}")
+        
+        while self.running:
+            try:
+                self.server_socket.settimeout(1.0)
+                try:
+                    client_socket, addr = self.server_socket.accept()
+                except socket.timeout:
+                    continue
+                
+                # Xử lý mỗi connection trong thread riêng
+                threading.Thread(
+                    target=self._handle_connection,
+                    args=(client_socket, addr),
+                    daemon=True
+                ).start()
+            
+            except Exception as e:
+                if self.running:
+                    print(f"[SERVER] Error: {e}")
+    
+    def stop(self):
+        """Dừng server"""
+        self.running = False
+        if self.server_socket:
+            self.server_socket.close()
+    
+    def _handle_connection(self, sock, addr):
+        """Detect protocol và delegate đến handler phù hợp"""
+        try:
+            # Peek 8 bytes đầu để detect protocol
+            sock.settimeout(5.0)
+            peek_data = sock.recv(8, socket.MSG_PEEK)
+            
+            if not peek_data:
+                sock.close()
+                return
+            
+            # Detect HTTP
+            is_http = any(peek_data.startswith(method) for method in self.HTTP_METHODS)
+            
+            if is_http:
+                self._handle_http(sock, addr)
+            else:
+                self._handle_tcp(sock, addr)
+        
+        except Exception as e:
+            try:
+                sock.close()
+            except:
+                pass
+    
+    # ============================================================
+    # HTTP HANDLER
+    # ============================================================
+    
+    def _handle_http(self, sock, addr):
+        """Xử lý HTTP request"""
+        try:
+            sock.settimeout(60.0)
+            
+            # Đọc request line và headers
+            request_data = b""
+            while b"\r\n\r\n" not in request_data:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                request_data += chunk
+                if len(request_data) > 65536:  # Max header size
+                    break
+            
+            if b"\r\n\r\n" not in request_data:
+                self._send_http_error(sock, 400, "Bad Request")
+                return
+            
+            header_end = request_data.index(b"\r\n\r\n")
+            headers_raw = request_data[:header_end].decode("utf-8", errors="ignore")
+            body_start = request_data[header_end + 4:]
+            
+            # Parse request line
+            lines = headers_raw.split("\r\n")
+            request_line = lines[0]
+            parts = request_line.split(" ")
+            if len(parts) < 2:
+                self._send_http_error(sock, 400, "Bad Request")
+                return
+            
+            method = parts[0]
+            path = parts[1]
+            
+            # Parse headers
+            headers = {}
+            for line in lines[1:]:
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    headers[key.strip().lower()] = value.strip()
+            
+            # Đọc body nếu có
+            content_length = int(headers.get("content-length", 0))
+            body = body_start
+            while len(body) < content_length:
+                chunk = sock.recv(min(65536, content_length - len(body)))
+                if not chunk:
+                    break
+                body += chunk
+            
+            # Route request
+            self._route_http(sock, method, path, headers, body)
+        
+        except Exception as e:
+            traceback.print_exc()
+            try:
+                self._send_http_error(sock, 500, str(e))
+            except:
+                pass
+        finally:
+            try:
+                sock.close()
+            except:
+                pass
+    
+    def _route_http(self, sock, method, path, headers, body):
+        """Route HTTP request đến handler phù hợp"""
+        parsed = urlparse(path)
+        route = parsed.path
         params = parse_qs(parsed.query)
         
         try:
-            if path == "/api/status":
-                self.send_json({"status": "ok", "storage": STORAGE_DIR, "tcp_port": TCP_PORT})
+            if route == "/api/status":
+                self._send_http_json(sock, 200, {
+                    "status": "ok",
+                    "protocol": "unified",
+                    "storage": STORAGE_DIR,
+                    "port": self.port
+                })
             
-            elif path == "/api/list":
+            elif route == "/api/list" and method == "GET":
                 rel_path = params.get("path", ["/"])[0]
                 abs_path = safe_path(rel_path)
                 if abs_path is None:
-                    self.send_json({"error": "Invalid path"}, 400)
+                    self._send_http_json(sock, 400, {"error": "Invalid path"})
                     return
                 if not os.path.exists(abs_path):
                     os.makedirs(abs_path, exist_ok=True)
                 files = list_directory(abs_path)
-                self.send_json({"files": files, "path": rel_path})
+                self._send_http_json(sock, 200, {"files": files, "path": rel_path})
             
-            elif path == "/api/download":
+            elif route == "/api/download" and method == "GET":
                 rel_path = params.get("path", [""])[0]
                 abs_path = safe_path(rel_path)
                 if abs_path is None or not os.path.isfile(abs_path):
-                    self.send_json({"error": "File not found"}, 404)
+                    self._send_http_json(sock, 404, {"error": "File not found"})
                     return
                 
                 filename = os.path.basename(abs_path)
                 file_size = os.path.getsize(abs_path)
                 
-                self.send_response(200)
-                self.send_header("Content-Type", "application/octet-stream")
-                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-                self.send_header("Content-Length", str(file_size))
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
+                response_headers = (
+                    f"HTTP/1.1 200 OK\r\n"
+                    f"Content-Type: application/octet-stream\r\n"
+                    f"Content-Disposition: attachment; filename=\"{filename}\"\r\n"
+                    f"Content-Length: {file_size}\r\n"
+                    f"Access-Control-Allow-Origin: *\r\n"
+                    f"\r\n"
+                )
+                sock.sendall(response_headers.encode())
                 
                 with open(abs_path, "rb") as f:
                     while True:
                         data = f.read(CHUNK_SIZE)
                         if not data:
                             break
-                        self.wfile.write(data)
+                        sock.sendall(data)
             
-            else:
-                self.send_json({"error": "Not found"}, 404)
-        
-        except Exception as e:
-            self.send_json({"error": str(e)}, 500)
-    
-    def do_POST(self):
-        """Xử lý POST requests"""
-        parsed = urlparse(self.path)
-        path = parsed.path
-        
-        try:
-            if path == "/api/mkdir":
-                content_length = int(self.headers.get("Content-Length", 0))
-                body = json.loads(self.rfile.read(content_length))
-                rel_path = body.get("path", "")
+            elif route == "/api/upload" and method == "POST":
+                self._handle_http_upload(sock, headers, body)
+            
+            elif route == "/api/mkdir" and method == "POST":
+                data = json.loads(body)
+                rel_path = data.get("path", "")
                 abs_path = safe_path(rel_path)
                 if abs_path is None:
-                    self.send_json({"error": "Invalid path"}, 400)
+                    self._send_http_json(sock, 400, {"error": "Invalid path"})
                     return
                 os.makedirs(abs_path, exist_ok=True)
-                self.send_json({"success": True, "path": rel_path})
+                self._send_http_json(sock, 200, {"success": True, "path": rel_path})
             
-            elif path == "/api/delete":
-                content_length = int(self.headers.get("Content-Length", 0))
-                body = json.loads(self.rfile.read(content_length))
-                rel_path = body.get("path", "")
-                item_type = body.get("type", "file")
+            elif route == "/api/delete" and method == "POST":
+                data = json.loads(body)
+                rel_path = data.get("path", "")
+                item_type = data.get("type", "file")
                 abs_path = safe_path(rel_path)
                 if abs_path is None:
-                    self.send_json({"error": "Invalid path"}, 400)
+                    self._send_http_json(sock, 400, {"error": "Invalid path"})
                     return
                 if not os.path.exists(abs_path):
-                    self.send_json({"error": "Not found"}, 404)
+                    self._send_http_json(sock, 404, {"error": "Not found"})
                     return
                 if item_type == "folder":
                     shutil.rmtree(abs_path)
                 else:
                     os.remove(abs_path)
-                self.send_json({"success": True})
-            
-            elif path == "/api/upload":
-                self._handle_upload()
+                self._send_http_json(sock, 200, {"success": True})
             
             else:
-                self.send_json({"error": "Not found"}, 404)
+                self._send_http_json(sock, 404, {"error": "Not found"})
         
         except Exception as e:
             traceback.print_exc()
-            self.send_json({"error": str(e)}, 500)
+            self._send_http_json(sock, 500, {"error": str(e)})
     
-    def _handle_upload(self):
-        """Xử lý upload file (multipart/form-data)"""
-        content_type = self.headers.get("Content-Type", "")
+    def _handle_http_upload(self, sock, headers, body):
+        """Xử lý HTTP multipart upload"""
+        content_type = headers.get("content-type", "")
         
-        if "multipart/form-data" in content_type:
-            self._handle_multipart_upload()
-        else:
-            self.send_json({"error": "Unsupported content type"}, 400)
-    
-    def _handle_multipart_upload(self):
-        """Parse multipart form data và lưu file"""
-        content_type = self.headers.get("Content-Type", "")
-        content_length = int(self.headers.get("Content-Length", 0))
+        if "multipart/form-data" not in content_type:
+            self._send_http_json(sock, 400, {"error": "Unsupported content type"})
+            return
         
         # Extract boundary
         boundary = None
@@ -355,16 +454,12 @@ class CloudHTTPHandler(BaseHTTPRequestHandler):
                 break
         
         if not boundary:
-            self.send_json({"error": "No boundary found"}, 400)
+            self._send_http_json(sock, 400, {"error": "No boundary found"})
             return
-        
-        # Read body
-        body = self.rfile.read(content_length)
         
         # Parse multipart
         parts = self._parse_multipart(body, boundary)
         
-        # Extract fields
         fields = {}
         file_data = None
         file_name = None
@@ -378,10 +473,9 @@ class CloudHTTPHandler(BaseHTTPRequestHandler):
                 fields[name] = part["data"].decode("utf-8", errors="ignore")
         
         if file_data is None:
-            self.send_json({"error": "No file data"}, 400)
+            self._send_http_json(sock, 400, {"error": "No file data"})
             return
         
-        # Get upload metadata
         rel_path = fields.get("path", "/")
         chunk_index = int(fields.get("chunk", "0"))
         total_chunks = int(fields.get("totalChunks", "1"))
@@ -389,43 +483,36 @@ class CloudHTTPHandler(BaseHTTPRequestHandler):
         original_filename = fields.get("fileName", file_name)
         file_size = int(fields.get("fileSize", "0"))
         
-        # Build final path
         final_rel_path = rel_path.rstrip("/") + "/" + original_filename
         abs_path = safe_path(final_rel_path)
         if abs_path is None:
-            self.send_json({"error": "Invalid path"}, 400)
+            self._send_http_json(sock, 400, {"error": "Invalid path"})
             return
         
         if total_chunks == 1:
-            # Single chunk upload - save directly with atomic write
             os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-            
-            # Write to temp file first
             temp_path = abs_path + ".tmp"
             with open(temp_path, "wb") as f:
                 f.write(file_data)
             
-            # Verify checksum if provided
             if checksum:
                 actual = hashlib.sha256(file_data).hexdigest()
                 if actual != checksum:
                     os.remove(temp_path)
-                    self.send_json({"error": f"Checksum mismatch"}, 400)
+                    self._send_http_json(sock, 400, {"error": "Checksum mismatch"})
                     return
             
-            # Atomic rename
             if os.path.exists(abs_path):
                 os.remove(abs_path)
             os.rename(temp_path, abs_path)
             
-            self.send_json({
+            self._send_http_json(sock, 200, {
                 "success": True,
                 "filename": original_filename,
                 "size": len(file_data),
                 "checksum_verified": bool(checksum)
             })
         else:
-            # Multi-chunk upload
             if chunk_index == 0:
                 upload_manager.start_upload(final_rel_path, total_chunks, checksum, file_size)
             
@@ -434,9 +521,9 @@ class CloudHTTPHandler(BaseHTTPRequestHandler):
             )
             
             if success:
-                self.send_json({"success": True, "message": message})
+                self._send_http_json(sock, 200, {"success": True, "message": message})
             else:
-                self.send_json({"error": message}, 400)
+                self._send_http_json(sock, 400, {"error": message})
     
     def _parse_multipart(self, body, boundary):
         """Parse multipart form data"""
@@ -446,11 +533,10 @@ class CloudHTTPHandler(BaseHTTPRequestHandler):
         
         sections = body.split(delimiter)
         
-        for section in sections[1:]:  # Skip first empty section
+        for section in sections[1:]:
             if section.startswith(b"--"):
-                break  # End boundary
+                break
             
-            # Split headers and content
             if b"\r\n\r\n" in section:
                 header_part, content = section.split(b"\r\n\r\n", 1)
             elif b"\n\n" in section:
@@ -458,11 +544,9 @@ class CloudHTTPHandler(BaseHTTPRequestHandler):
             else:
                 continue
             
-            # Remove trailing \r\n
             if content.endswith(b"\r\n"):
                 content = content[:-2]
             
-            # Parse headers
             headers = {}
             for line in header_part.decode("utf-8", errors="ignore").split("\n"):
                 line = line.strip()
@@ -470,7 +554,6 @@ class CloudHTTPHandler(BaseHTTPRequestHandler):
                     key, value = line.split(":", 1)
                     headers[key.strip().lower()] = value.strip()
             
-            # Extract name and filename from Content-Disposition
             disposition = headers.get("content-disposition", "")
             name = ""
             filename = ""
@@ -488,107 +571,38 @@ class CloudHTTPHandler(BaseHTTPRequestHandler):
             })
         
         return parts
-
-
-# ============================================================
-# TCP SERVER - Upload siêu nhanh
-# ============================================================
-
-class TCPServer:
-    """
-    TCP Server cho upload file siêu nhanh.
     
-    Giao thức TCP:
-    1. Client gửi header (JSON): {cmd, filename, size, checksum, path}
-    2. Server phản hồi: {status: "ready"}
-    3. Client gửi file data theo chunks
-    4. Server xác nhận từng chunk
-    5. Khi hoàn tất, server verify checksum
-    6. Server phản hồi: {status: "complete", checksum: "..."}
-    """
-    
-    def __init__(self, host="0.0.0.0", port=TCP_PORT):
-        self.host = host
-        self.port = port
-        self.running = False
-        self.server_socket = None
-    
-    def start(self):
-        """Khởi động TCP server"""
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        # Tăng buffer size cho tốc độ cao
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 * 1024 * 1024)
-        self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen(10)
-        self.running = True
+    def _send_http_json(self, sock, status, data):
+        """Gửi HTTP JSON response"""
+        body = json.dumps(data).encode()
+        status_text = {200: "OK", 400: "Bad Request", 404: "Not Found", 500: "Internal Server Error"}.get(status, "OK")
         
-        print(f"[TCP] Server đang chạy trên {self.host}:{self.port}")
-        print(f"[TCP] Giao thức: TCP Fast Upload với Checksum Verification")
+        response = (
+            f"HTTP/1.1 {status} {status_text}\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\n"
+            f"Access-Control-Allow-Origin: *\r\n"
+            f"Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+            f"Access-Control-Allow-Headers: Content-Type\r\n"
+            f"\r\n"
+        ).encode() + body
         
-        while self.running:
-            try:
-                self.server_socket.settimeout(1.0)
-                try:
-                    client_socket, addr = self.server_socket.accept()
-                except socket.timeout:
-                    continue
-                
-                print(f"[TCP] Kết nối mới từ {addr}")
-                # Xử lý mỗi client trong thread riêng
-                threading.Thread(
-                    target=self._handle_client,
-                    args=(client_socket, addr),
-                    daemon=True
-                ).start()
-            
-            except Exception as e:
-                if self.running:
-                    print(f"[TCP] Error: {e}")
+        sock.sendall(response)
     
-    def stop(self):
-        """Dừng TCP server"""
-        self.running = False
-        if self.server_socket:
-            self.server_socket.close()
+    def _send_http_error(self, sock, status, message):
+        """Gửi HTTP error response"""
+        self._send_http_json(sock, status, {"error": message})
     
-    def _send_json(self, sock, data):
-        """Gửi JSON qua TCP với length prefix"""
-        msg = json.dumps(data).encode()
-        # Send length (4 bytes) + message
-        sock.sendall(struct.pack(">I", len(msg)) + msg)
+    # ============================================================
+    # TCP CUSTOM PROTOCOL HANDLER
+    # ============================================================
     
-    def _recv_json(self, sock):
-        """Nhận JSON từ TCP với length prefix"""
-        # Receive length (4 bytes)
-        length_data = self._recv_exact(sock, 4)
-        if not length_data:
-            return None
-        length = struct.unpack(">I", length_data)[0]
-        if length > 10 * 1024 * 1024:  # Max 10MB header
-            return None
-        # Receive message
-        msg_data = self._recv_exact(sock, length)
-        if not msg_data:
-            return None
-        return json.loads(msg_data.decode())
-    
-    def _recv_exact(self, sock, n):
-        """Nhận chính xác n bytes"""
-        data = b""
-        while len(data) < n:
-            chunk = sock.recv(n - len(data))
-            if not chunk:
-                return None
-            data += chunk
-        return data
-    
-    def _handle_client(self, sock, addr):
-        """Xử lý kết nối TCP từ client"""
+    def _handle_tcp(self, sock, addr):
+        """Xử lý TCP custom protocol"""
         try:
-            sock.settimeout(300)  # 5 phút timeout
+            sock.settimeout(300)
             
-            # Nhận command header
+            # Nhận header (length-prefixed JSON)
             header = self._recv_json(sock)
             if not header:
                 self._send_json(sock, {"status": "error", "message": "Invalid header"})
@@ -612,7 +626,6 @@ class TCPServer:
                 self._send_json(sock, {"status": "error", "message": f"Unknown command: {cmd}"})
         
         except Exception as e:
-            print(f"[TCP] Error handling client {addr}: {e}")
             try:
                 self._send_json(sock, {"status": "error", "message": str(e)})
             except:
@@ -631,20 +644,16 @@ class TCPServer:
             self._send_json(sock, {"status": "error", "message": "Invalid upload request"})
             return
         
-        # Build final path
         final_rel_path = rel_path.rstrip("/") + "/" + filename
         abs_path = safe_path(final_rel_path)
         if abs_path is None:
             self._send_json(sock, {"status": "error", "message": "Invalid path"})
             return
         
-        # Tạo thư mục nếu chưa có
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
         
-        # Thông báo sẵn sàng nhận data
         self._send_json(sock, {"status": "ready", "message": "Send file data"})
         
-        # Nhận file data
         temp_path = abs_path + ".tcp_tmp"
         received = 0
         sha256 = hashlib.sha256()
@@ -653,7 +662,6 @@ class TCPServer:
         try:
             with open(temp_path, "wb") as f:
                 while received < file_size:
-                    # Tính chunk size còn lại
                     remaining = file_size - received
                     chunk_size = min(CHUNK_SIZE, remaining)
                     
@@ -665,7 +673,6 @@ class TCPServer:
                     sha256.update(data)
                     received += len(data)
                     
-                    # Gửi progress mỗi 10%
                     if received % (CHUNK_SIZE * 10) == 0 or received >= file_size:
                         progress = (received / file_size) * 100
                         self._send_json(sock, {
@@ -676,7 +683,6 @@ class TCPServer:
                         })
         
         except Exception as e:
-            # Xóa temp file nếu lỗi
             try:
                 os.remove(temp_path)
             except:
@@ -684,30 +690,25 @@ class TCPServer:
             self._send_json(sock, {"status": "error", "message": str(e)})
             return
         
-        # Verify checksum
         actual_checksum = sha256.hexdigest()
         
         if checksum and actual_checksum != checksum:
             os.remove(temp_path)
             self._send_json(sock, {
                 "status": "error",
-                "message": f"Checksum verification failed! Expected: {checksum[:16]}..., Got: {actual_checksum[:16]}..."
+                "message": "Checksum verification failed!"
             })
             return
         
-        # Atomic move - đảm bảo không mất file
         if os.path.exists(abs_path):
-            # Backup file cũ
             backup_path = abs_path + ".backup"
             os.rename(abs_path, backup_path)
         
         try:
             os.rename(temp_path, abs_path)
-            # Xóa backup nếu thành công
-            if os.path.exists(backup_path if 'backup_path' in dir() else ""):
+            if 'backup_path' in locals() and os.path.exists(backup_path):
                 os.remove(backup_path)
         except:
-            # Nếu rename fail, thử copy
             shutil.copy2(temp_path, abs_path)
             os.remove(temp_path)
         
@@ -724,44 +725,67 @@ class TCPServer:
             "elapsed_seconds": round(elapsed, 2)
         })
         
-        print(f"[TCP] Upload hoàn tất: {filename} ({file_size / 1024 / 1024:.1f} MB) - {speed:.1f} MB/s")
+        print(f"[TCP] Upload: {filename} ({file_size / 1024 / 1024:.1f} MB) - {speed:.1f} MB/s")
+    
+    def _send_json(self, sock, data):
+        """Gửi JSON qua TCP với length prefix"""
+        msg = json.dumps(data).encode()
+        sock.sendall(struct.pack(">I", len(msg)) + msg)
+    
+    def _recv_json(self, sock):
+        """Nhận JSON từ TCP"""
+        length_data = self._recv_exact(sock, 4)
+        if not length_data:
+            return None
+        length = struct.unpack(">I", length_data)[0]
+        if length > 10 * 1024 * 1024:
+            return None
+        msg_data = self._recv_exact(sock, length)
+        if not msg_data:
+            return None
+        return json.loads(msg_data.decode())
+    
+    def _recv_exact(self, sock, n):
+        """Nhận chính xác n bytes"""
+        data = b""
+        while len(data) < n:
+            chunk = sock.recv(n - len(data))
+            if not chunk:
+                return None
+            data += chunk
+        return data
 
 
 # ============================================================
-# MAIN - Khởi động cả HTTP và TCP
+# MAIN
 # ============================================================
 
 def main():
     print("=" * 60)
-    print("  ☁️  CLOUD PRIVATE SERVER")
-    print("  HTTP + TCP Combined Protocol")
+    print("  ☁️  CLOUD PRIVATE SERVER - UNIFIED PROTOCOL")
+    print("  HTTP + TCP Combined on SINGLE PORT")
     print("=" * 60)
     print(f"  📁 Storage: {STORAGE_DIR}")
-    print(f"  🌐 HTTP:    http://localhost:{HTTP_PORT}")
-    print(f"  🔌 TCP:     localhost:{TCP_PORT}")
+    print(f"  🔌 Port:    {PORT} (HTTP + TCP)")
     print("=" * 60)
     print()
-    
-    # Khởi động TCP server trong thread riêng
-    tcp_server = TCPServer()
-    tcp_thread = threading.Thread(target=tcp_server.start, daemon=True)
-    tcp_thread.start()
-    
-    # Khởi động HTTP server
-    http_server = HTTPServer(("0.0.0.0", HTTP_PORT), CloudHTTPHandler)
-    
-    print(f"[HTTP] Server đang chạy trên http://0.0.0.0:{HTTP_PORT}")
-    print(f"[HTTP] Frontend: Mở trình duyệt tại http://localhost:{HTTP_PORT}")
+    print("Server tự động detect protocol:")
+    print("  • HTTP request → xử lý như web API")
+    print("  • TCP custom → xử lý như fast upload")
+    print()
+    print("Frontend: Mở index.html trong trình duyệt")
+    print("TCP CLI: python tcp_client.py upload <file> [path]")
     print()
     print("Nhấn Ctrl+C để dừng server.")
     print()
     
+    server = UnifiedServer()
+    
     try:
-        http_server.serve_forever()
+        server.start()
     except KeyboardInterrupt:
         print("\n[INFO] Đang dừng server...")
-        tcp_server.stop()
-        http_server.shutdown()
+        server.stop()
         print("[INFO] Server đã dừng.")
 
 
