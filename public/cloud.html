@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Private - Frontend Thuần</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --border: #475569;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .logo { display: flex; align-items: center; gap: 12px; }
+        .logo-icon {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+        }
+        .logo h1 {
+            font-size: 20px;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .logo p { font-size: 11px; color: var(--text-secondary); }
+        .header-right { display: flex; align-items: center; gap: 16px; }
+        .conn-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+        .dot.ok { background: var(--success); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .server-cfg {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--bg-tertiary); border-radius: 8px; padding: 6px 12px;
+        }
+        .server-cfg label { font-size: 12px; color: var(--text-secondary); }
+        .server-cfg input {
+            background: transparent; border: none; color: var(--text-primary);
+            font-size: 12px; width: 140px; outline: none;
+        }
+        .toolbar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 12px;
+        }
+        .breadcrumb { display: flex; align-items: center; gap: 4px; font-size: 14px; flex-wrap: wrap; }
+        .breadcrumb a {
+            color: var(--accent); text-decoration: none;
+            padding: 4px 8px; border-radius: 6px; cursor: pointer;
+        }
+        .breadcrumb a:hover { background: var(--bg-tertiary); }
+        .breadcrumb span { color: var(--text-secondary); }
+        .actions { display: flex; gap: 8px; }
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 8px;
+            font-size: 14px; cursor: pointer; display: flex;
+            align-items: center; gap: 6px; transition: all 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); }
+        .btn-secondary:hover { background: var(--border); }
+        .status-bar {
+            background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+            padding: 8px 24px; font-size: 13px; display: none;
+        }
+        .status-bar.show { display: block; }
+        .progress-bar {
+            width: 100%; height: 6px; background: var(--bg-tertiary);
+            border-radius: 3px; overflow: hidden; margin-top: 6px;
+        }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, var(--accent), #8b5cf6);
+            transition: width 0.3s; width: 0%;
+        }
+        .main { max-width: 1400px; margin: 0 auto; padding: 24px; min-height: calc(100vh - 200px); }
+        .drop-overlay {
+            position: fixed; inset: 0;
+            background: rgba(59,130,246,0.1); border: 4px dashed var(--accent);
+            display: none; align-items: center; justify-content: center; z-index: 100;
+        }
+        .drop-overlay.show { display: flex; }
+        .drop-content { background: var(--bg-secondary); padding: 40px; border-radius: 20px; text-align: center; }
+        .drop-content .icon { font-size: 48px; margin-bottom: 12px; }
+        .drop-content p { font-size: 18px; color: var(--accent); font-weight: 600; }
+        .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+        .file-item {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 12px; padding: 20px 16px; text-align: center;
+            cursor: pointer; transition: all 0.2s; position: relative;
+        }
+        .file-item:hover {
+            border-color: var(--accent); transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59,130,246,0.2);
+        }
+        .file-item .icon { font-size: 36px; margin-bottom: 8px; }
+        .file-item .name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-item .meta { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+        .empty-state { text-align: center; padding: 80px 20px; }
+        .empty-state .icon { font-size: 64px; margin-bottom: 16px; }
+        .empty-state h3 { color: var(--text-secondary); font-size: 18px; }
+        .empty-state p { color: var(--text-secondary); font-size: 14px; margin-top: 8px; opacity: 0.7; }
+        .warning {
+            background: rgba(234,179,8,0.1); border: 1px solid rgba(234,179,8,0.3);
+            border-radius: 12px; padding: 16px; margin-bottom: 24px;
+            display: none; align-items: flex-start; gap: 12px;
+        }
+        .warning.show { display: flex; }
+        .warning .icon { font-size: 24px; }
+        .warning h4 { color: #fbbf24; font-size: 14px; }
+        .warning p { color: #fbbf24; font-size: 12px; opacity: 0.7; margin-top: 4px; }
+        .warning code { background: var(--bg-primary); padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            display: none; align-items: center; justify-content: center; z-index: 200;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 16px; padding: 24px; width: 400px; max-width: 90vw;
+        }
+        .modal h3 { margin-bottom: 16px; font-size: 18px; }
+        .modal input {
+            width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px 14px; color: var(--text-primary);
+            font-size: 14px; outline: none;
+        }
+        .modal input:focus { border-color: var(--accent); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+        .ctx-menu {
+            position: fixed; background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 8px; padding: 4px; min-width: 160px; z-index: 300;
+            display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .ctx-menu.show { display: block; }
+        .ctx-menu button {
+            width: 100%; padding: 8px 12px; border: none; background: none;
+            color: var(--text-primary); font-size: 13px; text-align: left;
+            cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;
+        }
+        .ctx-menu button:hover { background: var(--bg-tertiary); }
+        .ctx-menu button.danger { color: var(--danger); }
+        .footer {
+            border-top: 1px solid var(--border); padding: 16px 24px;
+            display: flex; justify-content: space-between; font-size: 12px;
+            color: var(--text-secondary); flex-wrap: wrap; gap: 8px;
+        }
+        @media (max-width: 768px) {
+            .file-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .header { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">☁️</div>
+            <div>
+                <h1>Cloud Private</h1>
+                <p>Lưu trữ cá nhân • HTTP + TCP Combined Protocol</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="conn-status">
+                <div class="dot" id="statusDot"></div>
+                <span id="statusText">Đang kết nối...</span>
+            </div>
+            <div class="server-cfg">
+                <label>Server:</label>
+                <input type="text" id="serverUrl" value="http://localhost:8080" onchange="checkConnection()">
+            </div>
+        </div>
+    </header>
+    <div class="toolbar">
+        <div class="breadcrumb" id="breadcrumb"><a onclick="nav('/')">🏠 Root</a></div>
+        <div class="actions">
+            <button class="btn btn-secondary" onclick="showModal()">📁 Thư mục mới</button>
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📤 Tải lên</button>
+            <input type="file" id="fileInput" multiple style="display:none" onchange="uploadFiles(this.files)">
+        </div>
+    </div>
+    <div class="status-bar" id="statusBar">
+        <span id="statusMsg"></span>
+        <div class="progress-bar" id="progBar" style="display:none">
+            <div class="progress-fill" id="progFill"></div>
+        </div>
+    </div>
+    <main class="main" id="mainArea">
+        <div class="warning" id="warn">
+            <div class="icon">⚠️</div>
+            <div>
+                <h4>Chưa kết nối server</h4>
+                <p>Chạy: <code>python server.py</code> trong thư mục project</p>
+            </div>
+        </div>
+        <div id="fileBox"></div>
+    </main>
+    <div class="drop-overlay" id="dropOv">
+        <div class="drop-content"><div class="icon">📥</div><p>Thả file để tải lên</p></div>
+    </div>
+    <div class="modal-overlay" id="folderModal">
+        <div class="modal">
+            <h3>📁 Tạo thư mục mới</h3>
+            <input type="text" id="folderInput" placeholder="Tên thư mục..." onkeydown="if(event.key==='Enter')createFolder()">
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal()">Hủy</button>
+                <button class="btn btn-primary" onclick="createFolder()">Tạo</button>
+            </div>
+        </div>
+    </div>
+    <div class="ctx-menu" id="ctxMenu">
+        <button onclick="dlSelected()">📥 Tải xuống</button>
+        <button class="danger" onclick="delSelected()">🗑️ Xóa</button>
+    </div>
+    <footer class="footer">
+        <span>Cloud Private • HTTP + TCP Protocol</span>
+        <span id="pathDisplay">/</span>
+    </footer>
+
+    <script>
+    let curPath = '/', files = [], selFile = null, connected = false;
+    const API = () => document.getElementById('serverUrl').value;
+
+    async function checkConnection() {
+        try {
+            const r = await fetch(API() + '/api/status');
+            if (r.ok) {
+                connected = true;
+                document.getElementById('statusDot').classList.add('ok');
+                document.getElementById('statusText').textContent = 'Đã kết nối';
+                document.getElementById('warn').classList.remove('show');
+            } else setDisc();
+        } catch { setDisc(); }
+    }
+
+    function setDisc() {
+        connected = false;
+        document.getElementById('statusDot').classList.remove('ok');
+        document.getElementById('statusText').textContent = 'Mất kết nối';
+        document.getElementById('warn').classList.add('show');
+    }
+
+    async function loadFiles() {
+        try {
+            const r = await fetch(API() + '/api/list?path=' + encodeURIComponent(curPath));
+            if (r.ok) { const d = await r.json(); files = d.files || []; }
+        } catch { files = []; }
+        render();
+        updateBC();
+        document.getElementById('pathDisplay').textContent = curPath;
+    }
+
+    function render() {
+        const c = document.getElementById('fileBox');
+        if (!files.length) {
+            c.innerHTML = '<div class="empty-state"><div class="icon">📂</div><h3>Thư mục trống</h3><p>Kéo thả file hoặc nhấn "Tải lên"</p></div>';
+            return;
+        }
+        const sorted = [...files].sort((a, b) => {
+            if (a.type === 'folder' && b.type !== 'folder') return -1;
+            if (a.type !== 'folder' && b.type === 'folder') return 1;
+            return a.name.localeCompare(b.name);
+        });
+        c.innerHTML = '<div class="file-grid">' + sorted.map(f => {
+            const esc = JSON.stringify(f).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            return '<div class="file-item" onclick=\'navigateItem(' + esc + ')\' oncontextmenu="showCtx(event,' + esc.replace(/&quot;/g, '&quot;') + ')">' +
+                '<div class="icon">' + getIcon(f) + '</div>' +
+                '<div class="name" title="' + f.name + '">' + f.name + '</div>' +
+                '<div class="meta">' + (f.type === 'folder' ? 'Thư mục' : fmtSize(f.size)) + '</div></div>';
+        }).join('') + '</div>';
+    }
+
+    function getIcon(f) {
+        if (f.type === 'folder') return '📁';
+        const ext = (f.name.split('.').pop() || '').toLowerCase();
+        const m = {pdf:'📄',doc:'📝',docx:'📝',txt:'📃',xls:'📊',xlsx:'📊',jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',svg:'🖼️',webp:'🖼️',mp4:'🎬',avi:'🎬',mkv:'🎬',mov:'🎬',mp3:'🎵',wav:'🎵',flac:'🎵',zip:'📦',rar:'📦','7z':'📦',tar:'📦',py:'🐍',js:'📜',html:'🌐',css:'🎨',exe:'⚙️',msi:'⚙️'};
+        return m[ext] || '📄';
+    }
+
+    function fmtSize(b) {
+        if (!b) return '-';
+        if (b < 1024) return b + ' B';
+        if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+        if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+        return (b/1073741824).toFixed(2) + ' GB';
+    }
+
+    function navigateItem(f) {
+        if (typeof f === 'string') f = JSON.parse(f);
+        if (f.type === 'folder') { curPath = f.path + '/'; loadFiles(); }
+        else download(f);
+    }
+
+    function nav(p) { curPath = p; loadFiles(); }
+
+    function goBack() {
+        if (curPath === '/') return;
+        const p = curPath.split('/').filter(Boolean);
+        p.pop();
+        curPath = '/' + (p.length ? p.join('/') + '/' : '');
+        loadFiles();
+    }
+
+    function updateBC() {
+        const bc = document.getElementById('breadcrumb');
+        const parts = curPath.split('/').filter(Boolean);
+        let h = '<a onclick="nav(\'/\')">🏠 Root</a>';
+        if (curPath !== '/') h += ' <span>/</span> <a onclick="goBack()">← Quay lại</a>';
+        let sp = '/';
+        parts.forEach((p, i) => { sp += p + '/'; h += ' <span>/</span> <a onclick="nav(\'' + sp + '\')">' + p + '</a>'; });
+        bc.innerHTML = h;
+    }
+
+    async function uploadFiles(fl) {
+        if (!fl || !fl.length) return;
+        const total = fl.length;
+        let done = 0;
+        showSt('Đang upload 0/' + total + '...');
+        showProg(true);
+        for (let i = 0; i < fl.length; i++) {
+            try { await uploadOne(fl[i]); done++; setProg(Math.round(done/total*100)); showSt('Đang upload ' + done + '/' + total + '...'); }
+            catch(e) { showSt('❌ Lỗi: ' + fl[i].name); }
+        }
+        showProg(false);
+        showSt('✅ Đã upload ' + done + '/' + total + ' file!');
+        setTimeout(hideSt, 3000);
+        loadFiles();
+        document.getElementById('fileInput').value = '';
+    }
+
+    async function uploadOne(file) {
+        const buf = await file.arrayBuffer();
+        const hash = await crypto.subtle.digest('SHA-256', buf);
+        const cs = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+        const csz = 1048576;
+        const tc = Math.ceil(file.size / csz);
+        for (let c = 0; c < tc; c++) {
+            const s = c * csz, e = Math.min(s + csz, file.size);
+            const blob = file.slice(s, e);
+            const fd = new FormData();
+            fd.append('file', blob, file.name);
+            fd.append('path', curPath);
+            fd.append('chunk', c.toString());
+            fd.append('totalChunks', tc.toString());
+            fd.append('checksum', cs);
+            fd.append('fileName', file.name);
+            fd.append('fileSize', file.size.toString());
+            const r = await fetch(API() + '/api/upload', { method: 'POST', body: fd });
+            if (!r.ok) throw new Error('Upload failed');
+        }
+    }
+
+    function download(f) { window.open(API() + '/api/download?path=' + encodeURIComponent(f.path), '_blank'); }
+
+    async function deleteItem(f) {
+        if (!confirm('Xóa "' + f.name + '"?')) return;
+        try {
+            const r = await fetch(API() + '/api/delete', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({path: f.path, type: f.type})
+            });
+            if (r.ok) { showSt('✅ Đã xóa!'); setTimeout(hideSt, 3000); loadFiles(); }
+        } catch { showSt('❌ Lỗi xóa'); setTimeout(hideSt, 3000); }
+    }
+
+    function showModal() {
+        document.getElementById('folderModal').classList.add('show');
+        document.getElementById('folderInput').value = '';
+        document.getElementById('folderInput').focus();
+    }
+    function hideModal() { document.getElementById('folderModal').classList.remove('show'); }
+
+    async function createFolder() {
+        const n = document.getElementById('folderInput').value.trim();
+        if (!n) return;
+        try {
+            const r = await fetch(API() + '/api/mkdir', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({path: curPath + n})
+            });
+            if (r.ok) { hideModal(); showSt('✅ Đã tạo thư mục!'); setTimeout(hideSt, 3000); loadFiles(); }
+        } catch { showSt('❌ Lỗi tạo thư mục'); setTimeout(hideSt, 3000); }
+    }
+
+    function showCtx(e, f) {
+        e.preventDefault(); e.stopPropagation();
+        if (typeof f === 'string') f = JSON.parse(f);
+        selFile = f;
+        const m = document.getElementById('ctxMenu');
+        m.style.left = e.clientX + 'px'; m.style.top = e.clientY + 'px';
+        m.classList.add('show');
+        m.querySelector('button:first-child').style.display = f.type === 'file' ? 'flex' : 'none';
+    }
+    function hideCtx() { document.getElementById('ctxMenu').classList.remove('show'); }
+    function dlSelected() { if (selFile) download(selFile); hideCtx(); }
+    function delSelected() { if (selFile) deleteItem(selFile); hideCtx(); }
+
+    // Drag & Drop
+    const ma = document.getElementById('mainArea');
+    ma.addEventListener('dragover', e => { e.preventDefault(); document.getElementById('dropOv').classList.add('show'); });
+    ma.addEventListener('dragleave', e => { if (!ma.contains(e.relatedTarget)) document.getElementById('dropOv').classList.remove('show'); });
+    ma.addEventListener('drop', e => { e.preventDefault(); document.getElementById('dropOv').classList.remove('show'); if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files); });
+
+    // UI helpers
+    function showSt(m) { document.getElementById('statusBar').classList.add('show'); document.getElementById('statusMsg').textContent = m; }
+    function hideSt() { document.getElementById('statusBar').classList.remove('show'); document.getElementById('progBar').style.display = 'none'; }
+    function showProg(s) { document.getElementById('progBar').style.display = s ? 'block' : 'none'; if (s) setProg(0); }
+    function setProg(p) { document.getElementById('progFill').style.width = p + '%'; }
+
+    document.addEventListener('click', hideCtx);
+    checkConnection();
+    setInterval(checkConnection, 5000);
+    loadFiles();
+    </script>
+</body>
+</html>
