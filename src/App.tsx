@@ -1,16 +1,5 @@
+// Stub tối thiểu - chỉ để build system hoạt động
+// Toàn bộ giao diện nằm trong index.html (HTML/CSS/JS thuần)
 export default function App() {
-  return (
-    <iframe
-      src="./cloud.html"
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100vw",
-        height: "100vh",
-        border: "none",
-      }}
-      title="Cloud Private"
-    />
-  );
+  return null;
 }
