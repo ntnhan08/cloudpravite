@@ -13,7 +13,57 @@ Hệ thống lưu trữ cá nhân với **HTTP + TCP kết hợp trên CÙNG 1 P
 - ✅ Drag & Drop
 - ✅ Không cần tạo tài khoản
 - ✅ Auto-detect protocol
-- ✅ **Không dùng framework** - HTML/CSS/JS thuần + Python
+- ✅ **One-click start** - Nhấn là chạy!
+
+## ⚡ Quick Start (1 Click)
+
+### Windows
+```
+Double-click: START.bat
+```
+
+### Linux / macOS
+```bash
+chmod +x START.sh
+./START.sh
+```
+
+**Script sẽ tự động:**
+1. ✅ Kiểm tra Python đã cài chưa
+2. ✅ Tạo thư mục lưu trữ
+3. ✅ Khởi động server
+4. ✅ Mở trình duyệt
+
+## 📋 Yêu cầu
+
+- **Python 3.7+** (chỉ cần Python, không cần cài gì thêm!)
+- Trình duyệt web hiện đại
+
+## 🔧 Manual Start
+
+Nếu không dùng one-click script:
+
+```bash
+cd public
+python server.py
+```
+
+Sau đó mở `index.html` trong trình duyệt hoặc truy cập http://localhost:8080
+
+## 📡 TCP Client (Fast Upload)
+
+```bash
+cd public
+
+# Upload file qua TCP (siêu nhanh)
+python tcp_client.py upload myfile.zip /documents/
+
+# Liệt kê file
+python tcp_client.py list /documents/
+
+# Ping server
+python tcp_client.py ping
+```
 
 ## 🔌 Unified Protocol
 
@@ -29,52 +79,6 @@ Client kết nối → Server peek 8 bytes đầu
 - Chỉ cần mở 1 port firewall
 - Frontend và TCP client dùng cùng URL
 - Không conflict port
-- Không cần build tool (Vite, Webpack, etc.)
-
-## 📋 Yêu cầu
-
-- Python 3.7+
-- Trình duyệt web hiện đại
-- Node.js (chỉ để chạy build script đơn giản)
-
-## 🔧 Cài đặt & Chạy
-
-### 1. Build (optional - chỉ copy files)
-
-```bash
-npm run build
-```
-
-Hoặc đơn giản copy files thủ công:
-```bash
-mkdir -p dist
-cp index.html dist/
-cp public/* dist/
-```
-
-### 2. Chạy Server
-
-```bash
-cd dist
-python server.py
-```
-
-Server sẽ chạy:
-- **Unified Port**: 8080 (cả HTTP + TCP)
-- **Storage**: ./cloud_storage/
-
-### 3. Mở Frontend
-
-Mở `dist/index.html` trong trình duyệt. Frontend kết nối qua HTTP đến cùng port 8080.
-
-### 4. Upload qua TCP (Fast Upload)
-
-```bash
-cd dist
-python tcp_client.py upload myfile.zip /documents/
-python tcp_client.py list /documents/
-python tcp_client.py ping
-```
 
 ## 📡 API Endpoints (HTTP)
 
@@ -97,18 +101,21 @@ python tcp_client.py ping
 ## 📁 Cấu trúc
 
 ```
-├── index.html          # Frontend HTML/CSS/JS thuần
-├── build.js            # Build script đơn giản (copy files)
-├── package.json        # Chỉ có script build
+├── START.bat             ← One-click start (Windows)
+├── START.sh              ← One-click start (Linux/Mac)
+├── index.html            ← Frontend HTML/CSS/JS thuần
+├── build.js              ← Build script (optional)
+├── package.json          ← Chỉ có script build
 ├── public/
-│   ├── server.py       # Backend Python (unified HTTP+TCP)
-│   ├── tcp_client.py   # TCP client CLI
-│   └── README.md       # Tài liệu này
-└── dist/               # Output sau khi build
-    ├── index.html
-    ├── server.py
-    ├── tcp_client.py
-    └── README.md
+│   ├── start.bat         ← Start script chi tiết (Windows)
+│   ├── start.sh          ← Start script chi tiết (Linux/Mac)
+│   ├── install.bat       ← Install script (Windows)
+│   ├── install.sh        ← Install script (Linux/Mac)
+│   ├── server.py         ← Backend Python (unified HTTP+TCP)
+│   ├── tcp_client.py     ← TCP client CLI
+│   ├── requirements.txt  ← Dependencies (không cần cài)
+│   └── README.md         ← Tài liệu này
+└── cloud_storage/        ← Thư mục lưu trữ (tự động tạo)
 ```
 
 ## ⚙️ Cấu hình
@@ -128,7 +135,24 @@ MAX_FILE_SIZE = 10GB
 - **Nhanh**: Không cần build time
 - **Đơn giản**: Chỉ cần Python + trình duyệt
 - **Dễ deploy**: Copy files là chạy được
+- **One-click**: Double-click là chạy
 - **Không lock-in**: Không phụ thuộc vào bất kỳ framework nào
+
+## 🐛 Troubleshooting
+
+### Lỗi "Python chưa được cài đặt"
+- Windows: Tải từ https://www.python.org/downloads/
+- macOS: `brew install python3`
+- Linux: `sudo apt install python3`
+
+### Lỗi "Port 8080 đã được sử dụng"
+- Đổi port trong `server.py`: `PORT = 9090`
+- Hoặc tắt ứng dụng đang dùng port 8080
+
+### Lỗi "Không kết nối được server"
+- Kiểm tra server đang chạy
+- Kiểm tra firewall không chặn port 8080
+- Thử truy cập http://localhost:8080/api/status
 
 ## 📝 License
 
