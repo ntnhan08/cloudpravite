@@ -13,6 +13,7 @@ Hệ thống lưu trữ cá nhân với **HTTP + TCP kết hợp trên CÙNG 1 P
 - ✅ Drag & Drop
 - ✅ Không cần tạo tài khoản
 - ✅ Auto-detect protocol
+- ✅ **Không dùng framework** - HTML/CSS/JS thuần + Python
 
 ## 🔌 Unified Protocol
 
@@ -20,7 +21,7 @@ Server chạy trên **1 port duy nhất** (mặc định 8080), tự động det
 
 ```
 Client kết nối → Server peek 8 bytes đầu
-  ├─ Bắt đầu bằng "GET "/"POST "/... → HTTP handler
+  ├─ Bắt đầu bằng HTTP method (GET, POST...) → HTTP handler
   └─ Bắt đầu bằng length-prefixed JSON → TCP handler
 ```
 
@@ -28,15 +29,33 @@ Client kết nối → Server peek 8 bytes đầu
 - Chỉ cần mở 1 port firewall
 - Frontend và TCP client dùng cùng URL
 - Không conflict port
+- Không cần build tool (Vite, Webpack, etc.)
 
 ## 📋 Yêu cầu
 
 - Python 3.7+
 - Trình duyệt web hiện đại
+- Node.js (chỉ để chạy build script đơn giản)
 
-## 🔧 Chạy Server
+## 🔧 Cài đặt & Chạy
+
+### 1. Build (optional - chỉ copy files)
 
 ```bash
+npm run build
+```
+
+Hoặc đơn giản copy files thủ công:
+```bash
+mkdir -p dist
+cp index.html dist/
+cp public/* dist/
+```
+
+### 2. Chạy Server
+
+```bash
+cd dist
 python server.py
 ```
 
@@ -44,20 +63,16 @@ Server sẽ chạy:
 - **Unified Port**: 8080 (cả HTTP + TCP)
 - **Storage**: ./cloud_storage/
 
-## 🌐 Frontend (HTTP)
+### 3. Mở Frontend
 
-Mở `index.html` trong trình duyệt. Frontend kết nối qua HTTP đến cùng port 8080.
+Mở `dist/index.html` trong trình duyệt. Frontend kết nối qua HTTP đến cùng port 8080.
 
-## 📡 TCP Client (Fast Upload)
+### 4. Upload qua TCP (Fast Upload)
 
 ```bash
-# Upload file qua TCP (siêu nhanh)
+cd dist
 python tcp_client.py upload myfile.zip /documents/
-
-# Liệt kê file
 python tcp_client.py list /documents/
-
-# Ping server
 python tcp_client.py ping
 ```
 
@@ -83,11 +98,17 @@ python tcp_client.py ping
 
 ```
 ├── index.html          # Frontend HTML/CSS/JS thuần
+├── build.js            # Build script đơn giản (copy files)
+├── package.json        # Chỉ có script build
 ├── public/
 │   ├── server.py       # Backend Python (unified HTTP+TCP)
 │   ├── tcp_client.py   # TCP client CLI
 │   └── README.md       # Tài liệu này
-└── cloud_storage/      # Thư mục lưu trữ (tự động tạo)
+└── dist/               # Output sau khi build
+    ├── index.html
+    ├── server.py
+    ├── tcp_client.py
+    └── README.md
 ```
 
 ## ⚙️ Cấu hình
@@ -100,3 +121,15 @@ STORAGE_DIR = "./cloud_storage"
 CHUNK_SIZE = 1MB
 MAX_FILE_SIZE = 10GB
 ```
+
+## 🎯 Tại sao không dùng framework?
+
+- **Nhẹ**: Không cần install hàng trăm MB dependencies
+- **Nhanh**: Không cần build time
+- **Đơn giản**: Chỉ cần Python + trình duyệt
+- **Dễ deploy**: Copy files là chạy được
+- **Không lock-in**: Không phụ thuộc vào bất kỳ framework nào
+
+## 📝 License
+
+MIT
