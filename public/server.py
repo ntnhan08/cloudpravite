@@ -354,6 +354,11 @@ class UnifiedServer:
         params = parse_qs(parsed.query)
         
         try:
+            # Serve frontend
+            if route == "/" and method == "GET":
+                self._serve_index_html(sock)
+                return
+            
             if route == "/api/status":
                 self._send_http_json(sock, 200, {
                     "status": "ok",
@@ -571,6 +576,44 @@ class UnifiedServer:
             })
         
         return parts
+    
+    def _serve_index_html(self, sock):
+        """Phục vụ file index.html"""
+        # Tìm index.html trong thư mục hiện tại hoặc thư mục cha
+        index_paths = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "index.html"),
+            "index.html"
+        ]
+        
+        index_file = None
+        for path in index_paths:
+            if os.path.isfile(path):
+                index_file = path
+                break
+        
+        if not index_file:
+            self._send_http_json(sock, 404, {
+                "error": "index.html not found",
+                "hint": "Please put index.html in the same directory as server.py"
+            })
+            return
+        
+        try:
+            with open(index_file, "rb") as f:
+                content = f.read()
+            
+            response = (
+                f"HTTP/1.1 200 OK\r\n"
+                f"Content-Type: text/html; charset=utf-8\r\n"
+                f"Content-Length: {len(content)}\r\n"
+                f"Access-Control-Allow-Origin: *\r\n"
+                f"\r\n"
+            ).encode() + content
+            
+            sock.sendall(response)
+        except Exception as e:
+            self._send_http_json(sock, 500, {"error": str(e)})
     
     def _send_http_json(self, sock, status, data):
         """Gửi HTTP JSON response"""
