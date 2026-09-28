@@ -1,72 +1,71 @@
 @echo off
-chcp 65001 >nul
 title Cloud Private Server
 
 echo.
-echo ╔═══════════════════════════════════════════════════════════╗
-echo ║  ☁️  CLOUD PRIVATE - AUTO START                         ║
-echo ║  HTTP + TCP Unified Protocol                            ║
-echo ╚═══════════════════════════════════════════════════════════╝
+echo ================================================================
+echo   CLOUD PRIVATE - AUTO START
+echo   HTTP + TCP Unified Protocol
+echo ================================================================
 echo.
 
-REM Kiểm tra Python
-echo [1/4] Đang kiểm tra Python...
+REM Kiem tra Python
+echo [1/4] Dang kiem tra Python...
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Python chưa được cài đặt!
+    echo [ERROR] Python chua duoc cai dat!
     echo.
-    echo Vui lòng cài Python từ: https://www.python.org/downloads/
+    echo Vui long cai Python tu: https://www.python.org/downloads/
     echo.
-    echo Nhấn phím bất kỳ để thoát...
+    echo Nhan phim bat ky de thoat...
     pause >nul
     exit /b 1
 )
 
 python --version
-echo ✅ Python đã sẵn sàng
+echo [OK] Python da san sang
 echo.
 
-REM Tạo thư mục storage
-echo [2/4] Đang tạo thư mục lưu trữ...
+REM Tao thu muc storage
+echo [2/4] Dang tao thu muc luu tru...
 if not exist "cloud_storage" (
     mkdir "cloud_storage"
-    echo ✅ Đã tạo thư mục cloud_storage
+    echo [OK] Da tao thu muc cloud_storage
 ) else (
-    echo ✅ Thư mục cloud_storage đã tồn tại
+    echo [OK] Thu muc cloud_storage da ton tai
 )
 echo.
 
-REM Kiểm tra server.py
-echo [3/4] Đang kiểm tra server.py...
+REM Kiem tra server.py
+echo [3/4] Dang kiem tra server.py...
 if not exist "server.py" (
-    echo ❌ Không tìm thấy server.py!
+    echo [ERROR] Khong tim thay server.py!
     echo.
-    echo Nhấn phím bất kỳ để thoát...
+    echo Nhan phim bat ky de thoat...
     pause >nul
     exit /b 1
 )
-echo ✅ server.py đã sẵn sàng
+echo [OK] server.py da san sang
 echo.
 
-REM Mở trình duyệt
-echo [4/4] Đang mở trình duyệt...
+REM Mo trinh duyet
+echo [4/4] Dang mo trinh duyet...
 start http://localhost:8080
-echo ✅ Đã mở trình duyệt
+echo [OK] Da mo trinh duyet
 echo.
 
-echo ═══════════════════════════════════════════════════════════
-echo   🚀 Đang khởi động server...
-echo   📁 Storage: %cd%\cloud_storage
-echo   🌐 URL: http://localhost:8080
-echo   🔌 Port: 8080 (HTTP + TCP unified)
-echo ═══════════════════════════════════════════════════════════
+echo ================================================================
+echo   [START] Dang khoi dong server...
+echo   [STORAGE] %cd%\cloud_storage
+echo   [URL] http://localhost:8080
+echo   [PORT] 8080 (HTTP + TCP unified)
+echo ================================================================
 echo.
-echo   Nhấn Ctrl+C để dừng server
+echo   Nhan Ctrl+C de dung server
 echo.
 
-REM Chạy server
+REM Chay server
 python server.py
 
 echo.
-echo Server đã dừng.
+echo Server da dung.
 pause

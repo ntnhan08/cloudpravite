@@ -1,45 +1,44 @@
 @echo off
-chcp 65001 >nul
 title Cloud Private - Install Dependencies
 
 echo.
-echo ╔═══════════════════════════════════════════════════════════╗
-echo ║  ☁️  CLOUD PRIVATE - INSTALL DEPENDENCIES               ║
-echo ╚═══════════════════════════════════════════════════════════╝
+echo ================================================================
+echo   CLOUD PRIVATE - INSTALL DEPENDENCIES
+echo ================================================================
 echo.
 
-echo [1/3] Đang kiểm tra Python...
+echo [1/3] Dang kiem tra Python...
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Python chưa được cài đặt!
+    echo [ERROR] Python chua duoc cai dat!
     echo.
-    echo Vui lòng cài Python từ: https://www.python.org/downloads/
+    echo Vui long cai Python tu: https://www.python.org/downloads/
     echo.
     pause
     exit /b 1
 )
 python --version
-echo ✅ Python OK
+echo [OK] Python OK
 echo.
 
-echo [2/3] Đang kiểm tra pip...
+echo [2/3] Dang kiem tra pip...
 python -m pip --version >nul 2>&1
 if errorlevel 1 (
-    echo ⚠️  pip chưa có, đang cài đặt...
+    echo [WARN] pip chua co, dang cai dat...
     python -m ensurepip --upgrade
 )
-echo ✅ pip OK
+echo [OK] pip OK
 echo.
 
-echo [3/3] Đang cài đặt dependencies...
+echo [3/3] Dang cai dat dependencies...
 echo.
-echo ℹ️  Server sử dụng Python standard library - KHÔNG CẦN cài thêm gì!
+echo [INFO] Server su dung Python standard library - KHONG CAN cai them gi!
 echo.
-echo Nếu muốn cài optional packages:
+echo Neu muon cai optional packages:
 echo   pip install -r requirements.txt
 echo.
-echo ✅ Sẵn sàng chạy server!
+echo [OK] San sang chay server!
 echo.
-echo Chạy: start.bat
+echo Chay: start.bat
 echo.
 pause
