@@ -1,0 +1,9 @@
+{
+  "name": "cloud-private",
+  "version": "1.0.0",
+  "description": "Cloud Private - Unified HTTP+TCP Storage",
+  "private": true,
+  "scripts": {
+    "build": "node build.js"
+  }
+}

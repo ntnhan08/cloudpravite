@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Private - Lưu trữ cá nhân</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --border: #475569;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .logo { display: flex; align-items: center; gap: 12px; }
+        .logo-icon {
+            width: 44px; height: 44px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 4px 12px rgba(59,130,246,0.3);
+        }
+        .logo h1 {
+            font-size: 22px;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .logo p { font-size: 11px; color: var(--text-secondary); }
+        .unified-badge {
+            background: linear-gradient(135deg, #22c55e, #3b82f6);
+            color: white;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .conn-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); transition: background 0.3s; }
+        .dot.ok { background: var(--success); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .server-cfg {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--bg-tertiary); border-radius: 8px; padding: 6px 12px;
+        }
+        .server-cfg label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+        .server-cfg input {
+            background: transparent; border: none; color: var(--text-primary);
+            font-size: 12px; width: 140px; outline: none;
+        }
+        /* Toolbar */
+        .toolbar {
+            background: rgba(30,41,59,0.7);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 12px;
+            backdrop-filter: blur(8px);
+        }
+        .breadcrumb { display: flex; align-items: center; gap: 4px; font-size: 14px; flex-wrap: wrap; }
+        .breadcrumb a {
+            color: var(--accent); text-decoration: none;
+            padding: 4px 8px; border-radius: 6px; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .breadcrumb a:hover { background: var(--bg-tertiary); }
+        .breadcrumb span.sep { color: var(--text-secondary); }
+        .actions { display: flex; gap: 8px; }
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 8px;
+            font-size: 14px; cursor: pointer; display: flex;
+            align-items: center; gap: 6px; transition: all 0.2s;
+            font-weight: 500;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); }
+        .btn-secondary:hover { background: var(--border); }
+        /* Status bar */
+        .status-bar {
+            background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+            padding: 10px 24px; font-size: 13px; display: none;
+        }
+        .status-bar.show { display: block; }
+        .progress-bar {
+            width: 100%; height: 6px; background: var(--bg-tertiary);
+            border-radius: 3px; overflow: hidden; margin-top: 8px;
+        }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, var(--accent), #8b5cf6);
+            transition: width 0.3s; width: 0%;
+        }
+        /* Main */
+        .main { max-width: 1400px; margin: 0 auto; padding: 24px; min-height: calc(100vh - 220px); }
+        /* Drop overlay */
+        .drop-overlay {
+            position: fixed; inset: 0;
+            background: rgba(59,130,246,0.1); border: 4px dashed var(--accent);
+            display: none; align-items: center; justify-content: center; z-index: 100;
+            backdrop-filter: blur(4px);
+        }
+        .drop-overlay.show { display: flex; }
+        .drop-content { background: var(--bg-secondary); padding: 48px 64px; border-radius: 20px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        .drop-content .icon { font-size: 56px; margin-bottom: 12px; }
+        .drop-content p { font-size: 20px; color: var(--accent); font-weight: 600; }
+        /* File grid */
+        .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
+        .file-item {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 12px; padding: 20px 16px; text-align: center;
+            cursor: pointer; transition: all 0.2s; position: relative;
+        }
+        .file-item:hover {
+            border-color: var(--accent); transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(59,130,246,0.15);
+        }
+        .file-item .icon { font-size: 40px; margin-bottom: 10px; }
+        .file-item .name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+        .file-item .meta { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+        /* Empty */
+        .empty-state { text-align: center; padding: 80px 20px; }
+        .empty-state .icon { font-size: 72px; margin-bottom: 16px; }
+        .empty-state h3 { color: var(--text-secondary); font-size: 20px; }
+        .empty-state p { color: var(--text-secondary); font-size: 14px; margin-top: 8px; opacity: 0.7; }
+        /* Warning */
+        .warning {
+            background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.3);
+            border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;
+            display: none; align-items: flex-start; gap: 12px;
+        }
+        .warning.show { display: flex; }
+        .warning .icon { font-size: 24px; flex-shrink: 0; }
+        .warning h4 { color: #fbbf24; font-size: 14px; margin-bottom: 4px; }
+        .warning p { color: #fbbf24; font-size: 12px; opacity: 0.8; }
+        .warning code { background: var(--bg-primary); padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        /* Modal */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+            display: none; align-items: center; justify-content: center; z-index: 200;
+            backdrop-filter: blur(4px);
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 16px; padding: 28px; width: 400px; max-width: 90vw;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal h3 { margin-bottom: 16px; font-size: 18px; }
+        .modal input {
+            width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 8px; padding: 12px 14px; color: var(--text-primary);
+            font-size: 14px; outline: none; transition: border-color 0.2s;
+        }
+        .modal input:focus { border-color: var(--accent); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+        /* Context menu */
+        .ctx-menu {
+            position: fixed; background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 10px; padding: 6px; min-width: 170px; z-index: 300;
+            display: none; box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+        }
+        .ctx-menu.show { display: block; }
+        .ctx-menu button {
+            width: 100%; padding: 10px 14px; border: none; background: none;
+            color: var(--text-primary); font-size: 13px; text-align: left;
+            cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;
+            transition: background 0.15s;
+        }
+        .ctx-menu button:hover { background: var(--bg-tertiary); }
+        .ctx-menu button.danger { color: var(--danger); }
+        /* Footer */
+        .footer {
+            border-top: 1px solid var(--border); padding: 16px 24px;
+            display: flex; justify-content: space-between; font-size: 12px;
+            color: var(--text-secondary); flex-wrap: wrap; gap: 8px;
+        }
+        /* Responsive */
+        @media (max-width: 768px) {
+            .file-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .header { flex-direction: column; align-items: flex-start; }
+            .file-item { padding: 14px 10px; }
+            .file-item .icon { font-size: 32px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">☁️</div>
+            <div>
+                <h1>Cloud Private</h1>
+                <p>Lưu trữ cá nhân • <span class="unified-badge">UNIFIED</span> HTTP + TCP trên cùng 1 port</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="conn-status">
+                <div class="dot" id="statusDot"></div>
+                <span id="statusText">Đang kết nối...</span>
+            </div>
+            <div class="server-cfg">
+                <label>Server:</label>
+                <input type="text" id="serverUrl" value="http://localhost:8080">
+            </div>
+        </div>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="breadcrumb" id="breadcrumb">
+            <a onclick="nav('/')">🏠 Root</a>
+        </div>
+        <div class="actions">
+            <button class="btn btn-secondary" onclick="showModal()">📁 Thư mục mới</button>
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📤 Tải lên</button>
+            <input type="file" id="fileInput" multiple style="display:none">
+        </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar" id="statusBar">
+        <span id="statusMsg"></span>
+        <div class="progress-bar" id="progBar" style="display:none">
+            <div class="progress-fill" id="progFill"></div>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <main class="main" id="mainArea">
+        <div class="warning" id="warn">
+            <div class="icon">⚠️</div>
+            <div>
+                <h4>Chưa kết nối server Python</h4>
+                <p>Mở terminal và chạy: <code>python server.py</code></p>
+                <p style="margin-top:4px">Server chạy unified port 8080 (HTTP + TCP cùng lúc)</p>
+            </div>
+        </div>
+        <div id="fileBox"></div>
+    </main>
+
+    <!-- Drop overlay -->
+    <div class="drop-overlay" id="dropOv">
+        <div class="drop-content">
+            <div class="icon">📥</div>
+            <p>Thả file để tải lên</p>
+        </div>
+    </div>
+
+    <!-- New folder modal -->
+    <div class="modal-overlay" id="folderModal">
+        <div class="modal">
+            <h3>📁 Tạo thư mục mới</h3>
+            <input type="text" id="folderInput" placeholder="Nhập tên thư mục...">
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal()">Hủy</button>
+                <button class="btn btn-primary" onclick="createFolder()">Tạo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context menu -->
+    <div class="ctx-menu" id="ctxMenu">
+        <button id="ctxDownload" onclick="dlSelected()">📥 Tải xuống</button>
+        <button class="danger" onclick="delSelected()">🗑️ Xóa</button>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <span>☁️ Cloud Private • Unified Protocol (HTTP + TCP trên cùng 1 port)</span>
+        <span id="pathDisplay">/</span>
+    </footer>
+
+
+
+    <!-- Toàn bộ logic frontend thuần JS -->
+    <script>
+    // ============================================================
+    // STATE
+    // ============================================================
+    let curPath = '/';
+    let files = [];
+    let selFile = null;
+    let connected = false;
+
+    const API = () => document.getElementById('serverUrl').value;
+
+    // ============================================================
+    // CONNECTION
+    // ============================================================
+    async function checkConnection() {
+        try {
+            const r = await fetch(API() + '/api/status');
+            if (r.ok) {
+                connected = true;
+                document.getElementById('statusDot').classList.add('ok');
+                document.getElementById('statusText').textContent = 'Đã kết nối';
+                document.getElementById('warn').classList.remove('show');
+            } else {
+                setDisc();
+            }
+        } catch {
+            setDisc();
+        }
+    }
+
+    function setDisc() {
+        connected = false;
+        document.getElementById('statusDot').classList.remove('ok');
+        document.getElementById('statusText').textContent = 'Mất kết nối';
+        document.getElementById('warn').classList.add('show');
+    }
+
+    // ============================================================
+    // FILE LIST
+    // ============================================================
+    async function loadFiles() {
+        try {
+            const r = await fetch(API() + '/api/list?path=' + encodeURIComponent(curPath));
+            if (r.ok) {
+                const d = await r.json();
+                files = d.files || [];
+            } else {
+                files = [];
+            }
+        } catch {
+            files = [];
+        }
+        render();
+        updateBC();
+        document.getElementById('pathDisplay').textContent = curPath;
+    }
+
+    function render() {
+        const c = document.getElementById('fileBox');
+        if (!files.length) {
+            c.innerHTML = '<div class="empty-state"><div class="icon">📂</div><h3>Thư mục trống</h3><p>Kéo thả file hoặc nhấn nút "Tải lên" để bắt đầu</p></div>';
+            return;
+        }
+        // Sort: folders first
+        const sorted = [...files].sort((a, b) => {
+            if (a.type === 'folder' && b.type !== 'folder') return -1;
+            if (a.type !== 'folder' && b.type === 'folder') return 1;
+            return a.name.localeCompare(b.name);
+        });
+        c.innerHTML = '<div class="file-grid">' + sorted.map(f => {
+            const dataAttr = encodeURIComponent(JSON.stringify(f));
+            return '<div class="file-item" data-item="' + dataAttr + '" onclick="navigateItem(this)" oncontextmenu="showCtx(event, this)">' +
+                '<div class="icon">' + getIcon(f) + '</div>' +
+                '<div class="name" title="' + escHtml(f.name) + '">' + escHtml(f.name) + '</div>' +
+                '<div class="meta">' + (f.type === 'folder' ? '📁 Thư mục' : fmtSize(f.size)) + '</div>' +
+                '</div>';
+        }).join('') + '</div>';
+    }
+
+    function escHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function getIcon(f) {
+        if (f.type === 'folder') return '📁';
+        const ext = (f.name.split('.').pop() || '').toLowerCase();
+        const m = {
+            pdf:'📄', doc:'📝', docx:'📝', txt:'📃', rtf:'📃',
+            xls:'📊', xlsx:'📊', csv:'📊',
+            ppt:'📽️', pptx:'📽️',
+            jpg:'🖼️', jpeg:'🖼️', png:'🖼️', gif:'🖼️', svg:'🖼️', webp:'🖼️', bmp:'🖼️', ico:'🖼️',
+            mp4:'🎬', avi:'🎬', mkv:'🎬', mov:'🎬', wmv:'🎬', flv:'🎬', webm:'🎬',
+            mp3:'🎵', wav:'🎵', flac:'🎵', aac:'🎵', ogg:'🎵', m4a:'🎵',
+            zip:'📦', rar:'📦', '7z':'📦', tar:'📦', gz:'📦',
+            py:'🐍', js:'📜', ts:'📜', jsx:'📜', html:'🌐', css:'🎨', json:'📋', xml:'📋',
+            exe:'⚙️', msi:'⚙️', dmg:'⚙️', app:'⚙️',
+            iso:'💿', img:'💿',
+            ttf:'🔤', otf:'🔤', woff:'🔤',
+            sql:'🗃️', db:'🗃️',
+            md:'📑', log:'📋'
+        };
+        return m[ext] || '📄';
+    }
+
+    function fmtSize(b) {
+        if (!b && b !== 0) return '-';
+        if (b < 1024) return b + ' B';
+        if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+        if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+        return (b / 1073741824).toFixed(2) + ' GB';
+    }
+
+    // ============================================================
+    // NAVIGATION
+    // ============================================================
+    function navigateItem(el) {
+        const f = JSON.parse(decodeURIComponent(el.dataset.item));
+        if (f.type === 'folder') {
+            curPath = f.path + '/';
+            loadFiles();
+        } else {
+            download(f);
+        }
+    }
+
+    function nav(p) {
+        curPath = p;
+        loadFiles();
+    }
+
+    function goBack() {
+        if (curPath === '/') return;
+        const parts = curPath.split('/').filter(Boolean);
+        parts.pop();
+        curPath = '/' + (parts.length ? parts.join('/') + '/' : '');
+        loadFiles();
+    }
+
+    function updateBC() {
+        const bc = document.getElementById('breadcrumb');
+        const parts = curPath.split('/').filter(Boolean);
+        let h = '<a onclick="nav(\'/\')">🏠 Root</a>';
+        if (curPath !== '/') {
+            h += ' <span class="sep">/</span> <a onclick="goBack()">← Quay lại</a>';
+        }
+        let sp = '/';
+        parts.forEach(p => {
+            sp += p + '/';
+            h += ' <span class="sep">/</span> <a onclick="nav(\'' + sp + '\')">' + escHtml(p) + '</a>';
+        });
+        bc.innerHTML = h;
+    }
+
+    // ============================================================
+    // UPLOAD (Chunked + Checksum SHA-256)
+    // ============================================================
+    async function uploadFiles(fl) {
+        if (!fl || !fl.length) return;
+        const total = fl.length;
+        let done = 0;
+        showSt('⏳ Đang chuẩn bị upload ' + total + ' file...');
+        showProg(true);
+
+        for (let i = 0; i < fl.length; i++) {
+            try {
+                await uploadOne(fl[i]);
+                done++;
+                setProg(Math.round(done / total * 100));
+                showSt('⏳ Đang upload ' + done + '/' + total + '...');
+            } catch (e) {
+                showSt('❌ Lỗi upload: ' + fl[i].name + ' - ' + e.message);
+                await sleep(1500);
+            }
+        }
+
+        showProg(false);
+        showSt('✅ Đã upload ' + done + '/' + total + ' file thành công!');
+        setTimeout(hideSt, 4000);
+        loadFiles();
+        document.getElementById('fileInput').value = '';
+    }
+
+    async function uploadOne(file) {
+        // Tính SHA-256 checksum
+        const buf = await file.arrayBuffer();
+        const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+        const hashArr = Array.from(new Uint8Array(hashBuf));
+        const checksum = hashArr.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        // Chia file thành chunks 1MB
+        const CHUNK = 1048576;
+        const totalChunks = Math.ceil(file.size / CHUNK) || 1;
+
+        for (let c = 0; c < totalChunks; c++) {
+            const start = c * CHUNK;
+            const end = Math.min(start + CHUNK, file.size);
+            const blob = file.slice(start, end);
+
+            const fd = new FormData();
+            fd.append('file', blob, file.name);
+            fd.append('path', curPath);
+            fd.append('chunk', c.toString());
+            fd.append('totalChunks', totalChunks.toString());
+            fd.append('checksum', checksum);
+            fd.append('fileName', file.name);
+            fd.append('fileSize', file.size.toString());
+
+            const r = await fetch(API() + '/api/upload', {
+                method: 'POST',
+                body: fd
+            });
+
+            if (!r.ok) {
+                const err = await r.json().catch(() => ({}));
+                throw new Error(err.error || 'Upload failed');
+            }
+        }
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ============================================================
+    // DOWNLOAD & DELETE
+    // ============================================================
+    function download(f) {
+        window.open(API() + '/api/download?path=' + encodeURIComponent(f.path), '_blank');
+    }
+
+    async function deleteItem(f) {
+        if (!confirm('Bạn có chắc muốn xóa "' + f.name + '"?')) return;
+        try {
+            const r = await fetch(API() + '/api/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: f.path, type: f.type })
+            });
+            if (r.ok) {
+                showSt('✅ Đã xóa thành công!');
+                setTimeout(hideSt, 3000);
+                loadFiles();
+            } else {
+                showSt('❌ Lỗi xóa file');
+                setTimeout(hideSt, 3000);
+            }
+        } catch {
+            showSt('❌ Không kết nối được server');
+            setTimeout(hideSt, 3000);
+        }
+    }
+
+    // ============================================================
+    // CREATE FOLDER
+    // ============================================================
+    function showModal() {
+        document.getElementById('folderModal').classList.add('show');
+        const inp = document.getElementById('folderInput');
+        inp.value = '';
+        setTimeout(() => inp.focus(), 100);
+    }
+
+    function hideModal() {
+        document.getElementById('folderModal').classList.remove('show');
+    }
+
+    async function createFolder() {
+        const name = document.getElementById('folderInput').value.trim();
+        if (!name) return;
+        try {
+            const r = await fetch(API() + '/api/mkdir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: curPath + name })
+            });
+            if (r.ok) {
+                hideModal();
+                showSt('✅ Đã tạo thư mục "' + name + '"!');
+                setTimeout(hideSt, 3000);
+                loadFiles();
+            } else {
+                showSt('❌ Lỗi tạo thư mục');
+                setTimeout(hideSt, 3000);
+            }
+        } catch {
+            showSt('❌ Không kết nối được server');
+            setTimeout(hideSt, 3000);
+        }
+    }
+
+    // ============================================================
+    // CONTEXT MENU
+    // ============================================================
+    function showCtx(e, el) {
+        e.preventDefault();
+        e.stopPropagation();
+        const f = JSON.parse(decodeURIComponent(el.dataset.item));
+        selFile = f;
+        const m = document.getElementById('ctxMenu');
+        // Position
+        const x = Math.min(e.clientX, window.innerWidth - 180);
+        const y = Math.min(e.clientY, window.innerHeight - 100);
+        m.style.left = x + 'px';
+        m.style.top = y + 'px';
+        m.classList.add('show');
+        // Show/hide download
+        document.getElementById('ctxDownload').style.display = f.type === 'file' ? 'flex' : 'none';
+    }
+
+    function hideCtx() {
+        document.getElementById('ctxMenu').classList.remove('show');
+    }
+
+    function dlSelected() {
+        if (selFile) download(selFile);
+        hideCtx();
+    }
+
+    function delSelected() {
+        if (selFile) deleteItem(selFile);
+        hideCtx();
+    }
+
+    // ============================================================
+    // DRAG & DROP
+    // ============================================================
+    const mainArea = document.getElementById('mainArea');
+    let dragCounter = 0;
+
+    mainArea.addEventListener('dragenter', e => {
+        e.preventDefault();
+        dragCounter++;
+        document.getElementById('dropOv').classList.add('show');
+    });
+
+    mainArea.addEventListener('dragover', e => {
+        e.preventDefault();
+    });
+
+    mainArea.addEventListener('dragleave', e => {
+        dragCounter--;
+        if (dragCounter <= 0) {
+            dragCounter = 0;
+            document.getElementById('dropOv').classList.remove('show');
+        }
+    });
+
+    mainArea.addEventListener('drop', e => {
+        e.preventDefault();
+        dragCounter = 0;
+        document.getElementById('dropOv').classList.remove('show');
+        if (e.dataTransfer.files.length > 0) {
+            uploadFiles(e.dataTransfer.files);
+        }
+    });
+
+    // ============================================================
+    // UI HELPERS
+    // ============================================================
+    function showSt(msg) {
+        document.getElementById('statusBar').classList.add('show');
+        document.getElementById('statusMsg').textContent = msg;
+    }
+
+    function hideSt() {
+        document.getElementById('statusBar').classList.remove('show');
+        document.getElementById('progBar').style.display = 'none';
+    }
+
+    function showProg(show) {
+        document.getElementById('progBar').style.display = show ? 'block' : 'none';
+        if (show) setProg(0);
+    }
+
+    function setProg(pct) {
+        document.getElementById('progFill').style.width = pct + '%';
+    }
+
+    // ============================================================
+    // EVENT LISTENERS
+    // ============================================================
+    document.addEventListener('click', hideCtx);
+
+    document.getElementById('fileInput').addEventListener('change', function() {
+        if (this.files.length > 0) uploadFiles(this.files);
+    });
+
+    document.getElementById('folderInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') createFolder();
+        if (e.key === 'Escape') hideModal();
+    });
+
+    document.getElementById('serverUrl').addEventListener('change', checkConnection);
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    checkConnection();
+    setInterval(checkConnection, 5000);
+    loadFiles();
+    </script>
+</body>
+</html>

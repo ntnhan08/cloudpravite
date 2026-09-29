@@ -1,0 +1,9 @@
+# Cloud Private - Dependencies
+# ============================
+# Server sử dụng Python standard library - KHÔNG CẦN cài thêm gì!
+# 
+# Chỉ cần Python 3.7+ là chạy được.
+# 
+# Nếu muốn thêm tính năng (optional):
+# - aiohttp: cho async HTTP (không bắt buộc)
+# - cryptography: cho mã hóa nâng cao (không bắt buộc)
